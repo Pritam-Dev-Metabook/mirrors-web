@@ -1,0 +1,6 @@
+{
+    "enabled": true,
+    "url": "https://ask-raya-relay.pritam-ffb.workers.dev/ask",
+    "timeoutSeconds": 20,
+    "note": "Ask Raya live answers. Set enabled to true and url to your Cloudflare Worker's /ask address (Tools/AskRayaRelay/README.md). This file is copied next to the Web build as StreamingAssets/askraya.json and can be edited there without a rebuild. It never holds an API key."
+}
