@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <title>Mirrors · interactive optics laboratory</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <!--
+      Mirrors template: the canvas always fills the browser viewport (no fixed 1280x720 box). A fixed-size canvas that
+      is wider than the window is clipped by the browser and pointer input on the clipped canvas misses HUD buttons
+      (observed with the default template in a 904 px wide pane). The HUD scales with the screen, and the lesson's own
+      Fullscreen button toggles fullscreen, so no footer is needed.
+    -->
+    <div id="unity-container">
+      <canvas id="unity-canvas" width=1280 height=720 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+        <div id="unity-loading-text">Loading the laboratory…</div>
+      </div>
+      <div id="unity-warning"> </div>
+    </div>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+
+      // Temporary message banner, or a permanent error message on top of the canvas when type == 'error'.
+      function unityShowBanner(msg, type) {
+        var warningBanner = document.querySelector("#unity-warning");
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: #b3261e; color: white; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: #f2c94c; padding: 10px;';
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/Web.loader.js";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/Web.data.unityweb",
+        frameworkUrl: buildUrl + "/Web.framework.js.unityweb",
+        codeUrl: buildUrl + "/Web.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "Mirrors",
+        productVersion: "0.1.0",
+        showBanner: unityShowBanner,
+      };
+
+      // The engine keeps the render target matched to the canvas DOM size (times devicePixelRatio). Cap the ratio so
+      // high-density displays do not quadruple the pixel cost of the live reflections.
+      config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+
+      // A canvas without a layout size (a hidden tab panel, a hidden iframe, the browser pane of a desktop app while
+      // another pane is in front) has a 0x0 bounding rect. Left to itself the engine then shrinks the canvas to 1x1,
+      // and URP's half-resolution passes (SSAO downsample) ask for 0x0 textures: "RenderTextureDesc width must be
+      // greater than zero" on every frame (observed 9 October 2026). So the engine tracks the canvas size only while
+      // the rect is real; while it is degenerate the canvas keeps its last real size (initially the width/height
+      // attributes above) and nobody sees those frames anyway. The engine reads the flag every frame.
+      var unityModule = null;
+      function updateCanvasTracking() {
+        var rect = canvas.getBoundingClientRect();
+        var track = rect.width >= 2 && rect.height >= 2;
+        config.matchWebGLToCanvasSize = track;
+        if (unityModule) unityModule.matchWebGLToCanvasSize = track;
+      }
+      updateCanvasTracking();
+      if (window.ResizeObserver) new ResizeObserver(updateCanvasTracking).observe(canvas);
+      window.addEventListener("resize", updateCanvasTracking);
+      // Persist PlayerPrefs (lesson checkpoints and settings) automatically instead of the deprecated manual sync.
+      config.autoSyncPersistentDataPath = true;
+
+      document.querySelector("#unity-loading-bar").style.display = "block";
+
+      // The loading cover stays until the laboratory has drawn its first frame (MirrorsBrowser.jslib's
+      // MirrorsLaboratoryShown, called by the lesson's HUD), so the page never shows a dark frame between the loader and
+      // the lab's start panel (26 October 2026, the owner: "mini sec black panel shows and then after shows correct
+      // panel"). A fallback hides it 20 s after the engine is ready, should the call never come.
+      var loadingCoverHidden = false;
+      function hideLoadingCover() {
+        if (loadingCoverHidden) return;
+        loadingCoverHidden = true;
+        document.querySelector("#unity-loading-bar").style.display = "none";
+      }
+      window.__mirrorsLaboratoryShown = hideLoadingCover;
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+        }).then((unityInstance) => {
+          document.querySelector("#unity-progress-bar-full").style.width = "100%";
+          document.querySelector("#unity-loading-text").textContent = "Opening the laboratory…";
+          setTimeout(hideLoadingCover, 20000);
+          window.mirrorsUnityInstance = unityInstance;
+          unityModule = unityInstance.Module;
+          updateCanvasTracking();
+        }).catch((message) => {
+          unityShowBanner(message, 'error');
+        });
+      };
+
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
